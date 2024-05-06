@@ -71,6 +71,7 @@ public class NewBeeMallSeckillController {
             // 虚拟库存预热
             redisCache.setCacheObject(Constants.SECKILL_GOODS_STOCK_KEY + newBeeMallSeckill.getSeckillId(), newBeeMallSeckill.getSeckillNum());
             redisCache.deleteObject(Constants.SECKILL_GOODS_DETAIL + newBeeMallSeckill.getSeckillId());
+            redisCache.deleteObject(Constants.SECKILL_KEY + newBeeMallSeckill.getSeckillId());
             redisCache.deleteObject(Constants.SECKILL_GOODS_LIST);
         }
         return ResultGenerator.genDmlResult(result);

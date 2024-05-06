@@ -115,15 +115,7 @@ public class NewBeeMallSeckillServiceImpl implements NewBeeMallSeckillService {
         if (!RATE_LIMITER.tryAcquire(500, TimeUnit.MILLISECONDS)) {
             throw new NewBeeMallException("秒杀失败");
         }
-        // 判断用户是否购买过秒杀商品
-        if (redisCache.containsCacheSet(Constants.SECKILL_SUCCESS_USER_ID + seckillId, userId)) {
-            throw new NewBeeMallException("您已经购买过秒杀商品，请勿重复购买");
-        }
-        // 更新秒杀商品虚拟库存
-        Long stock = redisCache.luaDecrement(Constants.SECKILL_GOODS_STOCK_KEY + seckillId);
-        if (stock < 0) {
-            throw new NewBeeMallException("秒杀商品已售空");
-        }
+
         NewBeeMallSeckill newBeeMallSeckill = redisCache.getCacheObject(Constants.SECKILL_KEY + seckillId);
         if (newBeeMallSeckill == null) {
             newBeeMallSeckill = newBeeMallSeckillMapper.selectByPrimaryKey(seckillId);
@@ -138,6 +130,19 @@ public class NewBeeMallSeckillServiceImpl implements NewBeeMallSeckillService {
             throw new NewBeeMallException("秒杀未开启");
         } else if (nowTime > endTime) {
             throw new NewBeeMallException("秒杀已结束");
+        }
+
+        // 实现一人一单需要给下面两个步骤加一个分布式锁
+        // 判断用户是否购买过秒杀商品
+        if (redisCache.containsCacheSet(Constants.SECKILL_SUCCESS_USER_ID + seckillId, userId)) {
+            throw new NewBeeMallException("您已经购买过秒杀商品，请勿重复购买");
+        }
+        // 记录购买过的用户
+        redisCache.setCacheSet(Constants.SECKILL_SUCCESS_USER_ID + seckillId, userId);
+        // 更新秒杀商品虚拟库存
+        Long stock = redisCache.luaDecrement(Constants.SECKILL_GOODS_STOCK_KEY + seckillId);
+        if (stock < 0) {
+            throw new NewBeeMallException("秒杀商品已售空");
         }
 
         Date killTime = new Date();
@@ -158,8 +163,7 @@ public class NewBeeMallSeckillServiceImpl implements NewBeeMallSeckillService {
         if (result != 1) {
             throw new NewBeeMallException("很遗憾！未抢购到秒杀商品");
         }
-        // 记录购买过的用户
-        redisCache.setCacheSet(Constants.SECKILL_SUCCESS_USER_ID + seckillId, userId);
+
         long endExpireTime = endTime / 1000;
         long nowExpireTime = nowTime / 1000;
         redisCache.expire(Constants.SECKILL_SUCCESS_USER_ID + seckillId, endExpireTime - nowExpireTime, TimeUnit.SECONDS);
